@@ -30,6 +30,7 @@ Features:
 
    - Add your `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
    - Set `GITHUB_WEBHOOK_SECRET` (any random string)
+   - Set `TELEGRAM_THREAD_ID` (optional: topic/thread ID in Telegram group)
    - (Optional) Configure owner/repo filters
 
 4. **Deploy**

@@ -73,7 +73,7 @@ export default {
       }
       case "issue_comment": {
         const c = payload.comment;
-        text = `💬 *New Comment* by ${c.user.login}\nOn: ${payload.issue.title}\n\"${c.body}\"\n[View Comment](${c.html_url})`;
+        text = `💬 *New Comment* by ${c.user.login}\nOn: ${payload.issue.title}\n"${c.body}"\n[View Comment](${c.html_url})`;
         break;
       }
       case "workflow_run": {
@@ -84,21 +84,38 @@ export default {
         text = `🚨 *Workflow Failed*\nRepo: ${payload.repository.full_name}\nWorkflow: ${wr.name}\nBy: ${wr.actor.login}\n[View Run](${wr.html_url})`;
         break;
       }
+      case "repository": {
+        if (payload.action === "created") {
+          text = `📂 *New Repository Created*\nOwner: ${repoOwner}\nRepo: ${
+            payload.repository.full_name
+          }\nVisibility: ${
+            payload.repository.private ? "private" : "public"
+          }\n[Open Repo](${payload.repository.html_url})`;
+        }
+        break;
+      }
       default:
         return new Response("Ignored event " + githubEvent, { status: 200 });
     }
 
     if (text) {
+      const body = {
+        chat_id: env.TELEGRAM_CHAT_ID,
+        text,
+        parse_mode: "Markdown",
+        disable_web_page_preview: true,
+      };
+
+      // --- Optional: send to a topic in the group ---
+      if (env.TELEGRAM_THREAD_ID) {
+        body.message_thread_id = Number(env.TELEGRAM_THREAD_ID);
+      }
+
       const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: env.TELEGRAM_CHAT_ID,
-          text,
-          parse_mode: "Markdown",
-          disable_web_page_preview: true,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
