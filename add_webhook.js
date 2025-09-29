@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 // ============================== CONFIG ==============================
 const GITHUB_TOKEN = "ghp_example1234567890";
 const OWNER = "example-user";
