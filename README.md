@@ -13,17 +13,17 @@ Features:
 
 ## 🚀 Deploy to Cloudflare
 
-1. **Install Wrangler**
-
-   ```bash
-   npm install -g wrangler
-   ```
-
-2. **Clone the Project**
+1. **Clone the Project**
 
    ```bash
    git clone https://github.com/Ryas-Yusenda/github-telegram-bot.git
    cd github-telegram-bot
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   npm install
    ```
 
 3. **Edit `wrangler.toml`**
