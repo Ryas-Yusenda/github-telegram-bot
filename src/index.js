@@ -63,37 +63,61 @@ export default {
     switch (githubEvent) {
       case "push": {
         const p = payload.head_commit || {};
-        text = `📦 *Push* by ${payload.pusher.name}\nRepo: ${payload.repository.full_name}\nMessage: ${p.message}\n[View Commit](${p.url})`;
+        text = `📦 *Push* by ${payload.pusher?.name || "unknown"}
+Repo: ${payload.repository?.full_name || "-"}
+Message: ${p.message || "-"}
+[View Commit](${p.url || payload.repository?.html_url})`;
         break;
       }
+
       case "pull_request": {
-        const pr = payload.pull_request;
-        text = `🔀 *PR ${payload.action}* #${pr.number}\nTitle: ${pr.title}\nBy: ${pr.user.login}\n[Open PR](${pr.html_url})`;
+        const pr = payload.pull_request || {};
+        const action = pr.merged ? "merged" : payload.action;
+        text = `🔀 *PR ${action}* #${pr.number}
+Title: ${pr.title || "-"}
+By: ${pr.user?.login || "unknown"}
+[Open PR](${pr.html_url || payload.repository?.html_url})`;
         break;
       }
+
       case "issue_comment": {
-        const c = payload.comment;
-        text = `💬 *New Comment* by ${c.user.login}\nOn: ${payload.issue.title}\n"${c.body}"\n[View Comment](${c.html_url})`;
+        const c = payload.comment || {};
+        text = `💬 *Comment ${payload.action}* by ${c.user?.login || "unknown"}
+On: ${payload.issue?.title || "-"}
+"${c.body || "-"}"
+[View Comment](${c.html_url || payload.issue?.html_url})`;
         break;
       }
+
       case "workflow_run": {
-        const wr = payload.workflow_run;
+        const wr = payload.workflow_run || {};
         if (wr.conclusion !== "failure") {
           return new Response("Ignored (workflow not failed)", { status: 200 });
         }
-        text = `🚨 *Workflow Failed*\nRepo: ${payload.repository.full_name}\nWorkflow: ${wr.name}\nBy: ${wr.actor.login}\n[View Run](${wr.html_url})`;
+        text = `🚨 *Workflow Failed*
+Repo: ${payload.repository?.full_name || "-"}
+Workflow: ${wr.name || "-"}
+Attempt: ${wr.run_attempt || 1}
+By: ${wr.actor?.login || "unknown"}
+[View Run](${wr.html_url || payload.repository?.html_url})`;
         break;
       }
+
       case "repository": {
         if (payload.action === "created") {
-          text = `📂 *New Repository Created*\nOwner: ${repoOwner}\nRepo: ${
-            payload.repository.full_name
-          }\nVisibility: ${
-            payload.repository.private ? "private" : "public"
-          }\n[Open Repo](${payload.repository.html_url})`;
+          text = `📂 *New Repository Created*
+Owner: ${payload.repository?.owner?.login || repoOwner || "unknown"}
+Repo: ${payload.repository?.full_name || "-"}
+Visibility: ${payload.repository?.private ? "private" : "public"}
+[Open Repo](${payload.repository?.html_url})`;
+        } else if (payload.action === "deleted") {
+          text = `🗑️ *Repository Deleted*
+Owner: ${payload.repository?.owner?.login || repoOwner || "unknown"}
+Repo: ${payload.repository?.full_name || "-"}`;
         }
         break;
       }
+
       default:
         return new Response("Ignored event " + githubEvent, { status: 200 });
     }
