@@ -103,6 +103,17 @@ By: ${wr.actor?.login || "unknown"}
         break;
       }
 
+      case "release": {
+        const rel = payload.release || {};
+        text = `🏷️ *New Release ${payload.action}*
+Repo: ${payload.repository?.full_name || "-"}
+Tag: ${rel.tag_name || "-"}
+Name: ${rel.name || "-"}
+By: ${rel.author?.login || "unknown"}
+[View Release](${rel.html_url || payload.repository?.html_url})`;
+        break;
+      }
+
       case "repository": {
         if (payload.action === "created") {
           text = `📂 *New Repository Created*
