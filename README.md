@@ -98,14 +98,6 @@ Only notify for private repositories:
 VISIBILITY_FILTER = "private"
 ```
 
-### 4. Prod/Dev Environments
-
-Differentiate between production and development environments:
-
-```toml
-APP_ENV = "PROD"  # or "DEV"
-```
-
 ---
 
 ## 🔒 Security
