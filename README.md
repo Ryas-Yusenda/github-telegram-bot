@@ -27,7 +27,6 @@ Features:
    ```
 
 3. **Edit `wrangler.toml`**
-
    - Add your `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
    - Set `GITHUB_WEBHOOK_SECRET` (any random string)
    - Set `TELEGRAM_THREAD_ID` (optional: topic/thread ID in Telegram group)
@@ -63,7 +62,6 @@ Features:
 ## 🧪 Testing
 
 - **Test Webhook from GitHub**
-
   - On the webhook page, click `Redeliver` or `Ping`
   - Check logs in Cloudflare Dashboard → Workers → Logs
 
@@ -98,6 +96,14 @@ Only notify for private repositories:
 
 ```toml
 VISIBILITY_FILTER = "private"
+```
+
+### 4. Prod/Dev Environments
+
+Differentiate between production and development environments:
+
+```toml
+APP_ENV = "PROD"  # or "DEV"
 ```
 
 ---
