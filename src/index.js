@@ -100,7 +100,7 @@ const e = (v) =>
 ================================ */
 function envBadge(env) {
   const name = (env.APP_ENV || "DEV").toUpperCase();
-  const icon = name === "PROD" ? "🟥" : "🟩";
+  const icon = name === "PROD" ? "🔴" : "🟢";
   return `${icon} <b>${name}</b>`;
 }
 
