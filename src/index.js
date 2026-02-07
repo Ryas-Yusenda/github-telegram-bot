@@ -13,8 +13,9 @@ export default {
     const payloadArrayBuffer = await request.arrayBuffer();
     const expected = await hmacSign(
       env.GITHUB_WEBHOOK_SECRET,
-      payloadArrayBuffer
+      payloadArrayBuffer,
     );
+
     if (signature !== `sha256=${expected}`) {
       return new Response("Invalid signature", { status: 401 });
     }
@@ -22,155 +23,193 @@ export default {
     const payload = JSON.parse(new TextDecoder().decode(payloadArrayBuffer));
     const githubEvent = request.headers.get("x-github-event");
 
-    // --- Filter: Multiple allowed owners ---
+    // --- Filters ---
     const allowedOwners = (env.ALLOWED_OWNERS || "")
       .split(",")
       .map((o) => o.trim())
       .filter(Boolean);
 
     const repoOwner = payload.repository?.owner?.login;
-    if (allowedOwners.length > 0 && !allowedOwners.includes(repoOwner)) {
-      return new Response(`Ignored (owner ${repoOwner} not allowed)`, {
-        status: 200,
-      });
+    if (allowedOwners.length && !allowedOwners.includes(repoOwner)) {
+      return new Response("Ignored (owner not allowed)", { status: 200 });
     }
 
-    // --- Filter: By visibility ---
-    const visibilityFilter = env.VISIBILITY_FILTER || "all"; // public, private, all
+    const visibilityFilter = env.VISIBILITY_FILTER || "all";
     const isPrivate = payload.repository?.private === true;
-    if (visibilityFilter === "public" && isPrivate) {
-      return new Response("Ignored (private repo)", { status: 200 });
-    }
-    if (visibilityFilter === "private" && !isPrivate) {
-      return new Response("Ignored (public repo)", { status: 200 });
-    }
 
-    // --- Filter: By repo list (multi) ---
+    if (visibilityFilter === "public" && isPrivate)
+      return new Response("Ignored (private repo)", { status: 200 });
+
+    if (visibilityFilter === "private" && !isPrivate)
+      return new Response("Ignored (public repo)", { status: 200 });
+
     const allowedRepos = (env.ALLOWED_REPOS || "")
       .split(",")
       .map((r) => r.trim())
       .filter(Boolean);
 
     const currentRepo = payload.repository?.name;
-    if (allowedRepos.length > 0 && !allowedRepos.includes(currentRepo)) {
-      return new Response(`Ignored (repo ${currentRepo} not in list)`, {
-        status: 200,
-      });
+    if (allowedRepos.length && !allowedRepos.includes(currentRepo)) {
+      return new Response("Ignored (repo not allowed)", { status: 200 });
     }
 
-    // --- Build Telegram message ---
-    let text = null;
-    switch (githubEvent) {
-      case "push": {
-        const p = payload.head_commit || {};
-        text = `📦 *Push* by ${payload.pusher?.name || "unknown"}
-Repo: ${payload.repository?.full_name || "-"}
-Message: ${p.message || "-"}
-[View Commit](${p.url || payload.repository?.html_url})`;
-        break;
-      }
+    // --- Build message ---
+    const text = buildTelegramMessage(githubEvent, payload, env);
+    if (!text) return new Response("Ignored event", { status: 200 });
 
-      case "pull_request": {
-        const pr = payload.pull_request || {};
-        const action = pr.merged ? "merged" : payload.action;
-        text = `🔀 *PR ${action}* #${pr.number}
-Title: ${pr.title || "-"}
-By: ${pr.user?.login || "unknown"}
-[Open PR](${pr.html_url || payload.repository?.html_url})`;
-        break;
-      }
+    const body = {
+      chat_id: env.TELEGRAM_CHAT_ID,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    };
 
-      case "issue_comment": {
-        const c = payload.comment || {};
-        text = `💬 *Comment ${payload.action}* by ${c.user?.login || "unknown"}
-On: ${payload.issue?.title || "-"}
-"${c.body || "-"}"
-[View Comment](${c.html_url || payload.issue?.html_url})`;
-        break;
-      }
-
-      case "workflow_run": {
-        const wr = payload.workflow_run || {};
-        if (wr.conclusion !== "failure") {
-          return new Response("Ignored (workflow not failed)", { status: 200 });
-        }
-        text = `🚨 *Workflow Failed*
-Repo: ${payload.repository?.full_name || "-"}
-Workflow: ${wr.name || "-"}
-Attempt: ${wr.run_attempt || 1}
-By: ${wr.actor?.login || "unknown"}
-[View Run](${wr.html_url || payload.repository?.html_url})`;
-        break;
-      }
-
-      case "release": {
-        const rel = payload.release || {};
-        text = `🏷️ *New Release ${payload.action}*
-Repo: ${payload.repository?.full_name || "-"}
-Tag: ${rel.tag_name || "-"}
-Name: ${rel.name || "-"}
-By: ${rel.author?.login || "unknown"}
-[View Release](${rel.html_url || payload.repository?.html_url})`;
-        break;
-      }
-
-      case "repository": {
-        if (payload.action === "created") {
-          text = `📂 *New Repository Created*
-Owner: ${payload.repository?.owner?.login || repoOwner || "unknown"}
-Repo: ${payload.repository?.full_name || "-"}
-Visibility: ${payload.repository?.private ? "private" : "public"}
-[Open Repo](${payload.repository?.html_url})`;
-        } else if (payload.action === "deleted") {
-          text = `🗑️ *Repository Deleted*
-Owner: ${payload.repository?.owner?.login || repoOwner || "unknown"}
-Repo: ${payload.repository?.full_name || "-"}`;
-        }
-        break;
-      }
-
-      default:
-        return new Response("Ignored event " + githubEvent, { status: 200 });
+    if (env.TELEGRAM_THREAD_ID) {
+      body.message_thread_id = Number(env.TELEGRAM_THREAD_ID);
     }
 
-    if (text) {
-      const body = {
-        chat_id: env.TELEGRAM_CHAT_ID,
-        text,
-        parse_mode: "Markdown",
-        disable_web_page_preview: true,
-      };
-
-      // --- Optional: send to a topic in the group ---
-      if (env.TELEGRAM_THREAD_ID) {
-        body.message_thread_id = Number(env.TELEGRAM_THREAD_ID);
-      }
-
-      const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-      const res = await fetch(url, {
+    const res = await fetch(
+      `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
+      },
+    );
 
-      if (!res.ok) {
-        return new Response("Failed to send Telegram", { status: 500 });
-      }
+    if (!res.ok) {
+      return new Response("Failed to send Telegram", { status: 500 });
     }
 
     return new Response("OK", { status: 200 });
   },
 };
 
-// --- HMAC Sign Helper ---
+/* ===============================
+   Helper: Escape HTML
+================================ */
+const e = (v) =>
+  String(v ?? "-")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/* ===============================
+   Reusable Message Builder
+================================ */
+function buildTelegramMessage(event, payload, env) {
+  const repo = payload.repository || {};
+  const repoName = e(repo.full_name);
+
+  switch (event) {
+    case "push": {
+      const c = payload.head_commit || {};
+      const message = e(c.message || "-");
+
+      return (
+        `📦 <b>New Commit Pushed</b> \n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `👤 <b>Author:</b> ${e(payload.pusher?.name)}\n` +
+        `📁 <b>Repo:</b> <code>${repoName}</code>\n\n` +
+        `💬 <b>Commit Message:</b>\n` +
+        `<blockquote expandable>\n${message}\n</blockquote>\n` +
+        `🔗 <a href="${e(c.url || repo.html_url)}">View Commit</a>`
+      );
+    }
+
+    case "pull_request": {
+      const pr = payload.pull_request || {};
+      const action = pr.merged ? "Merged" : payload.action;
+
+      return (
+        `🔀 <b>Pull Request ${e(action)}</b> \n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
+        `📌 <b>#${pr.number}</b> by ${e(pr.user?.login)}\n\n` +
+        `<blockquote expandable>\n${e(pr.title)}\n</blockquote>\n` +
+        `🔗 <a href="${e(pr.html_url)}">Open PR</a>`
+      );
+    }
+
+    case "issue_comment": {
+      const c = payload.comment || {};
+
+      return (
+        `💬 <b>New Comment</b> \n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
+        `👤 <b>By:</b> ${e(c.user?.login)}\n\n` +
+        `<blockquote expandable>\n${e(c.body)}\n</blockquote>\n` +
+        `🔗 <a href="${e(c.html_url)}">View Comment</a>`
+      );
+    }
+
+    case "workflow_run": {
+      const wr = payload.workflow_run || {};
+      if (wr.conclusion !== "failure") return null;
+
+      return (
+        `🚨 <b>Workflow Failed</b> \n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
+        `⚙️ <b>Workflow:</b> ${e(wr.name)}\n` +
+        `👤 <b>By:</b> ${e(wr.actor?.login)}\n\n` +
+        `🔗 <a href="${e(wr.html_url)}">View Run</a>`
+      );
+    }
+
+    case "release": {
+      const r = payload.release || {};
+
+      return (
+        `🏷️ <b>New Release</b> \n` +
+        `━━━━━━━━━━━━━━━\n` +
+        `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
+        `🏷️ <b>Tag:</b> ${e(r.tag_name)}\n` +
+        `👤 <b>By:</b> ${e(r.author?.login)}\n\n` +
+        `🔗 <a href="${e(r.html_url)}">View Release</a>`
+      );
+    }
+
+    case "repository": {
+      if (payload.action === "created") {
+        return (
+          `📂 <b>Repository Created</b> \n` +
+          `━━━━━━━━━━━━━━━\n` +
+          `👤 <b>Owner:</b> ${e(repo.owner?.login)}\n` +
+          `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
+          `🔒 <b>Visibility:</b> ${repo.private ? "Private" : "Public"}\n\n` +
+          `🔗 <a href="${e(repo.html_url)}">Open Repo</a>`
+        );
+      }
+
+      if (payload.action === "deleted") {
+        return (
+          `🗑️ <b>Repository Deleted</b> \n` +
+          `━━━━━━━━━━━━━━━\n` +
+          `👤 <b>Owner:</b> ${e(repo.owner?.login)}\n` +
+          `📁 <b>Repo:</b> <code>${repoName}</code>`
+        );
+      }
+    }
+  }
+
+  return null;
+}
+
+/* ===============================
+   HMAC Helper
+================================ */
 async function hmacSign(secret, payload) {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
+
   const signature = await crypto.subtle.sign("HMAC", key, payload);
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))
