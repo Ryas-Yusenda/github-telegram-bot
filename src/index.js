@@ -96,11 +96,21 @@ const e = (v) =>
     .replace(/"/g, "&quot;");
 
 /* ===============================
+   Helper: Environment Badge
+================================ */
+function envBadge(env) {
+  const name = (env.APP_ENV || "DEV").toUpperCase();
+  const icon = name === "PROD" ? "🟥" : "🟩";
+  return `${icon} <b>${name}</b>`;
+}
+
+/* ===============================
    Reusable Message Builder
 ================================ */
 function buildTelegramMessage(event, payload, env) {
   const repo = payload.repository || {};
   const repoName = e(repo.full_name);
+  const badge = envBadge(env);
 
   switch (event) {
     case "push": {
@@ -108,7 +118,7 @@ function buildTelegramMessage(event, payload, env) {
       const message = e(c.message || "-");
 
       return (
-        `📦 <b>New Commit Pushed</b> \n` +
+        `📦 <b>New Commit Pushed</b> ${badge}\n` +
         `━━━━━━━━━━━━━━━\n` +
         `👤 <b>Author:</b> ${e(payload.pusher?.name)}\n` +
         `📁 <b>Repo:</b> <code>${repoName}</code>\n\n` +
@@ -123,7 +133,7 @@ function buildTelegramMessage(event, payload, env) {
       const action = pr.merged ? "Merged" : payload.action;
 
       return (
-        `🔀 <b>Pull Request ${e(action)}</b> \n` +
+        `🔀 <b>Pull Request ${e(action)}</b> ${badge}\n` +
         `━━━━━━━━━━━━━━━\n` +
         `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
         `📌 <b>#${pr.number}</b> by ${e(pr.user?.login)}\n\n` +
@@ -136,7 +146,7 @@ function buildTelegramMessage(event, payload, env) {
       const c = payload.comment || {};
 
       return (
-        `💬 <b>New Comment</b> \n` +
+        `💬 <b>New Comment</b> ${badge}\n` +
         `━━━━━━━━━━━━━━━\n` +
         `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
         `👤 <b>By:</b> ${e(c.user?.login)}\n\n` +
@@ -150,7 +160,7 @@ function buildTelegramMessage(event, payload, env) {
       if (wr.conclusion !== "failure") return null;
 
       return (
-        `🚨 <b>Workflow Failed</b> \n` +
+        `🚨 <b>Workflow Failed</b> ${badge}\n` +
         `━━━━━━━━━━━━━━━\n` +
         `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
         `⚙️ <b>Workflow:</b> ${e(wr.name)}\n` +
@@ -163,7 +173,7 @@ function buildTelegramMessage(event, payload, env) {
       const r = payload.release || {};
 
       return (
-        `🏷️ <b>New Release</b> \n` +
+        `🏷️ <b>New Release</b> ${badge}\n` +
         `━━━━━━━━━━━━━━━\n` +
         `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
         `🏷️ <b>Tag:</b> ${e(r.tag_name)}\n` +
@@ -175,7 +185,7 @@ function buildTelegramMessage(event, payload, env) {
     case "repository": {
       if (payload.action === "created") {
         return (
-          `📂 <b>Repository Created</b> \n` +
+          `📂 <b>Repository Created</b> ${badge}\n` +
           `━━━━━━━━━━━━━━━\n` +
           `👤 <b>Owner:</b> ${e(repo.owner?.login)}\n` +
           `📁 <b>Repo:</b> <code>${repoName}</code>\n` +
@@ -186,7 +196,7 @@ function buildTelegramMessage(event, payload, env) {
 
       if (payload.action === "deleted") {
         return (
-          `🗑️ <b>Repository Deleted</b> \n` +
+          `🗑️ <b>Repository Deleted</b> ${badge}\n` +
           `━━━━━━━━━━━━━━━\n` +
           `👤 <b>Owner:</b> ${e(repo.owner?.login)}\n` +
           `📁 <b>Repo:</b> <code>${repoName}</code>`

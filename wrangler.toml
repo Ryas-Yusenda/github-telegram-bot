@@ -1,14 +1,17 @@
 name = "github-telegram-bot"
 main = "src/index.js"
-compatibility_date = "2025-09-29"
+compatibility_date = "2026-12-31"
 
 [vars]
 TELEGRAM_BOT_TOKEN = "123456:ABC-DEF..."    # token bot Telegram
 TELEGRAM_CHAT_ID = "123456789"              # chat_id Telegram
 GITHUB_WEBHOOK_SECRET = "supersecretstring"
-TELEGRAM_THREAD_ID = "" # optional: topic/thread ID in Telegram group
+TELEGRAM_THREAD_ID = ""                     # optional: topic/thread ID in Telegram group
+
+# Environment badge (DEV / PROD)
+APP_ENV = "PROD"
 
 # Filter event (optional)
-ALLOWED_OWNERS = "ryasputra,company-x"   # List of Owners/Organizations
-VISIBILITY_FILTER = "all"                # "public" | "private" | "all"
-ALLOWED_REPOS = "main-app,internal-tool" # permitted repo list
+ALLOWED_OWNERS = "ryasputra,company-x"      # List of Owners/Organizations
+VISIBILITY_FILTER = "all"                   # "public" | "private" | "all"
+ALLOWED_REPOS = "main-app,internal-tool"    # permitted repo list
